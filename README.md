@@ -1,2 +1,3 @@
 # ai-image-detector
 Real vs AI-generated image classifier — PyTorch + timm backbone, Grad-CAM heatmaps, Gradio demo, ONNX export.
+AI Image Detector is a binary image classifier that distinguishes real photographs from AI-generated images (Stable Diffusion, Midjourney, DALL·E, GANs, etc.). It fine-tunes a pretrained EfficientNet-B3 / ConvNeXt-Tiny backbone on the GenImage / AIGCDetect dataset family, with a frozen-then-unfrozen training schedule, W&B tracking, and ONNX export for deployment. A Gradio demo serves predictions with Grad-CAM heatmaps so you can see where the model thinks the image was generated.
