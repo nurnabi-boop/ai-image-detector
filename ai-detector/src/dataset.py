@@ -52,7 +52,7 @@ def build_transforms(image_size: int, train: bool) -> A.Compose:
         return A.Compose(
             [
                 A.LongestMaxSize(max_size=pad),
-                A.PadIfNeeded(min_height=pad, min_width=pad, border_mode=0, value=0),
+                A.PadIfNeeded(min_height=pad, min_width=pad, border_mode=0, fill=0),
                 A.RandomCrop(image_size, image_size),
                 A.HorizontalFlip(p=0.5),
                 A.OneOf(
@@ -63,14 +63,14 @@ def build_transforms(image_size: int, train: bool) -> A.Compose:
                     ],
                     p=0.3,
                 ),
-                A.ImageCompression(quality_lower=60, quality_upper=100, p=0.5),
+                A.ImageCompression(quality_range=(60, 100), p=0.5),
                 A.ColorJitter(
                     brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05, p=0.5
                 ),
                 A.CoarseDropout(
-                    max_holes=4,
-                    max_height=image_size // 8,
-                    max_width=image_size // 8,
+                    num_holes_range=(1, 4),
+                    hole_height_range=(1, image_size // 8),
+                    hole_width_range=(1, image_size // 8),
                     p=0.3,
                 ),
                 A.Normalize(IMAGENET_MEAN, IMAGENET_STD),
@@ -81,7 +81,7 @@ def build_transforms(image_size: int, train: bool) -> A.Compose:
         [
             A.LongestMaxSize(max_size=image_size),
             A.PadIfNeeded(
-                min_height=image_size, min_width=image_size, border_mode=0, value=0
+                min_height=image_size, min_width=image_size, border_mode=0, fill=0
             ),
             A.Normalize(IMAGENET_MEAN, IMAGENET_STD),
             ToTensorV2(),

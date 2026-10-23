@@ -32,9 +32,10 @@ def export(checkpoint: str, out: str, opset: int = 17, atol: float = 1e-3) -> st
         out,
         input_names=["image"],
         output_names=["logits"],
-        dynamic_axes={"image": {0: "batch"}, "logits": {0: "batch"}},
+        dynamic_shapes=({0: torch.export.Dim("batch")},),
         opset_version=opset,
-        dynamo=False,
+        dynamo=True,
+        external_data=False,
     )
 
     proto = onnx.load(out)
