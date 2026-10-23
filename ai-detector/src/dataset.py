@@ -177,7 +177,26 @@ def load_splits(
     raw = load_dataset(cfg.hf_name, cache_dir=cfg.cache_dir)
     parts = [raw[s] for s in raw.keys()]
     full = concatenate_datasets(parts) if len(parts) > 1 else parts[0]
+    return split_dataset(
+        full,
+        cfg,
+        max_samples=max_samples,
+        val_frac=val_frac,
+        test_frac=test_frac,
+        balance=balance,
+    )
 
+
+def split_dataset(
+    full: HFDataset,
+    cfg: DataConfig,
+    max_samples: Optional[int] = None,
+    val_frac: float = 0.1,
+    test_frac: float = 0.1,
+    balance: bool = True,
+) -> tuple[HFDataset, HFDataset, HFDataset, tuple[str, ...]]:
+    """Subsample/balance an already-loaded HF dataset and split it
+    deterministically (same seed -> same test split for evaluate.py)."""
     image_col, label_col = _detect_columns(full)
     cfg.image_col = image_col
     cfg.label_col = label_col
@@ -210,9 +229,19 @@ def make_dataloaders(
     max_samples: Optional[int] = None,
     balance: bool = True,
 ) -> tuple[DataLoader, DataLoader, DataLoader, tuple[str, ...]]:
-    train_hf, val_hf, test_hf, class_names = load_splits(
-        cfg, max_samples=max_samples, balance=balance
+    splits = load_splits(cfg, max_samples=max_samples, balance=balance)
+    return make_loaders_from_splits(
+        cfg, splits, batch_size=batch_size, num_workers=num_workers
     )
+
+
+def make_loaders_from_splits(
+    cfg: DataConfig,
+    splits: tuple[HFDataset, HFDataset, HFDataset, tuple[str, ...]],
+    batch_size: int = 32,
+    num_workers: int = 2,
+) -> tuple[DataLoader, DataLoader, DataLoader, tuple[str, ...]]:
+    train_hf, val_hf, test_hf, class_names = splits
     train_ds = AIDetectorDataset(
         train_hf,
         build_transforms(cfg.image_size, train=True),
@@ -231,12 +260,13 @@ def make_dataloaders(
         cfg.image_col,
         cfg.label_col,
     )
+    pin_memory = torch.cuda.is_available()
     train_loader = DataLoader(
         train_ds,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
         drop_last=True,
     )
     val_loader = DataLoader(
@@ -244,16 +274,40 @@ def make_dataloaders(
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
     test_loader = DataLoader(
         test_ds,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
     return train_loader, val_loader, test_loader, class_names
+
+
+def make_synthetic_dataset(n: int = 64, size: int = 96, seed: int = 0) -> HFDataset:
+    """Tiny offline dataset for smoke tests / CI: "real" images are smooth
+    noise, "AI" images carry a periodic grid artifact. Learnable in a few
+    steps, needs no download."""
+    from datasets import ClassLabel, Features
+    from datasets import Image as HFImage
+
+    rng = np.random.default_rng(seed)
+    images, labels = [], []
+    yy, xx = np.mgrid[0:size, 0:size]
+    grid = ((np.sin(xx * 1.3) + np.sin(yy * 1.3)) * 40).astype(np.float32)
+    for i in range(n):
+        label = i % 2
+        base = rng.normal(128, 30, size=(size, size, 3)).astype(np.float32)
+        if label == 1:
+            base += grid[..., None]
+        images.append(Image.fromarray(np.clip(base, 0, 255).astype(np.uint8)))
+        labels.append(label)
+    features = Features(
+        {"image": HFImage(), "label": ClassLabel(names=list(CLASS_NAMES))}
+    )
+    return HFDataset.from_dict({"image": images, "label": labels}, features=features)
 
 
 def denormalize(images: np.ndarray) -> np.ndarray:
