@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project outputs
+ai-detector/models/
+ai-detector/reports/
+ai-detector/wandb/
+*.onnx
+*.pt
+batch_preview.png
